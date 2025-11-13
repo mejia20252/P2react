@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import api from '../../../app/axiosInstance';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faSpinner } from '@fortawesome/free-solid-svg-icons';
-
 interface StripePayload {
     success_url: string;
     cancel_url: string;
@@ -30,7 +29,7 @@ const Cart: React.FC = () => {
             setLoading(false);
         }
     };
-     // Función para vaciar el carrito
+    // Función para vaciar el carrito
     const vaciarCarrito = async () => {
         try {
             const response = await api.post('/carritos/vaciar_carrito/');
@@ -81,12 +80,12 @@ const Cart: React.FC = () => {
             }
         } catch (err: any) {
             console.error('❌ Error al procesar el pago:', err);
-            
+
             // Mostrar mensaje de error más específico
-            const errorMessage = err.response?.data?.error || 
-                               err.response?.data?.message || 
-                               'Error desconocido al procesar el pago';
-            
+            const errorMessage = err.response?.data?.error ||
+                err.response?.data?.message ||
+                'Error desconocido al procesar el pago';
+
             alert(`Error: ${errorMessage}`);
         } finally {
             setLoadingAccion(false);
@@ -129,8 +128,10 @@ const Cart: React.FC = () => {
 
     return (
         <div className="cart max-w-4xl mx-auto p-6">
+
+
             <h1 className="text-3xl font-bold mb-6">Carrito de Compras</h1>
-            
+
             {cart?.items.length === 0 ? (
                 <div className="bg-gray-100 border border-gray-300 text-gray-700 px-4 py-3 rounded">
                     No hay productos en el carrito.
@@ -157,7 +158,7 @@ const Cart: React.FC = () => {
                             </li>
                         ))}
                     </ul>
-                    
+
                     <div className="border-t pt-4 mb-6">
                         <div className="flex justify-between items-center">
                             <span className="text-xl font-semibold">Total:</span>
@@ -166,7 +167,7 @@ const Cart: React.FC = () => {
                             </span>
                         </div>
                     </div>
-                    
+
                     <div className="flex gap-4">
                         <button
                             onClick={handlePagarConStripe}

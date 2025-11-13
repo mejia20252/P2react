@@ -3,6 +3,7 @@ import api from '../../../app/axiosInstance';
 import CartButton from '../../../pages/Cliente/Carrito/CartButton'
 import VoiceRecognition from '../../../voice/VoiceRecognition'
 
+
 interface Product {
     id: number;
     nombre: string;

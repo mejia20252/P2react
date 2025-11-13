@@ -27,8 +27,20 @@ const VoiceRecognition = () => {
     recognitionRef.current.lang = 'es-ES';
     recognitionRef.current.interimResults = true;
     recognitionRef.current.maxAlternatives = 1;
-    recognitionRef.current.continuous = false; // Se detiene automáticamente después de detectar silencio
+    recognitionRef.current.continuous = false;
   }
+
+  // Función para descargar archivos
+  const downloadFile = (blob: Blob, filename: string) => {
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  };
 
   const sendToDialogflow = useCallback(async (text: string) => {
     // Evitar enviar el mismo texto dos veces
@@ -40,11 +52,60 @@ const VoiceRecognition = () => {
       setIsSending(true);
       lastSentTextRef.current = text;
       
-      const res = await axios.post('/dialogflow/', { text });
-      setResponse(res.data.message);
-    } catch (error) {
+      // CAMBIO IMPORTANTE: Usar responseType 'blob' para detectar archivos
+      const res = await axios.post('/dialogflow/', 
+        { text },
+        { 
+          responseType: 'blob',
+          // Mantener la validación del status
+          validateStatus: (status) => status >= 200 && status < 300
+        }
+      );
+
+      // Verificar el Content-Type de la respuesta
+      const contentType = res.headers['content-type'];
+      
+      // Si es un archivo PDF o Excel
+      if (contentType === 'application/pdf' || 
+          contentType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
+        
+        // Extraer el nombre del archivo del header Content-Disposition
+        const contentDisposition = res.headers['content-disposition'];
+        let filename = 'reporte';
+        
+        if (contentDisposition) {
+          const filenameMatch = contentDisposition.match(/filename="?(.+)"?/);
+          if (filenameMatch && filenameMatch[1]) {
+            filename = filenameMatch[1];
+          }
+        }
+        
+        // Descargar el archivo
+        downloadFile(res.data, filename);
+        setResponse(`✅ Reporte descargado: ${filename}`);
+        
+      } else {
+        // Si es JSON, convertir el blob a texto y parsearlo
+        const text = await res.data.text();
+        const jsonData = JSON.parse(text);
+        setResponse(jsonData.message || jsonData.fulfillment_text || 'Operación exitosa');
+      }
+      
+    } catch (error: any) {
       console.error('Error en la comunicación con Dialogflow:', error);
-      setResponse('Lo siento, no pude procesar tu solicitud.');
+      
+      // Intentar extraer el mensaje de error del blob si existe
+      if (error.response && error.response.data instanceof Blob) {
+        try {
+          const text = await error.response.data.text();
+          const errorData = JSON.parse(text);
+          setResponse(`❌ Error: ${errorData.error || errorData.message}`);
+        } catch {
+          setResponse('❌ Lo siento, no pude procesar tu solicitud.');
+        }
+      } else {
+        setResponse('❌ Lo siento, no pude procesar tu solicitud.');
+      }
     } finally {
       setIsSending(false);
     }
@@ -94,7 +155,7 @@ const VoiceRecognition = () => {
       setListening(false);
       
       if (event.error !== 'no-speech' && event.error !== 'aborted') {
-        setResponse(`Error: ${event.error}`);
+        setResponse(`❌ Error: ${event.error}`);
       }
     };
 

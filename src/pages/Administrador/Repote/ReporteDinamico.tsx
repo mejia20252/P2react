@@ -1,148 +1,121 @@
-import { useState } from 'react'
-import { toast } from 'react-toastify'
-import axios from '../../../app/axiosInstance'
-import qs from 'qs'
+import React, { useState } from 'react';
+import axios from '../../../app/axiosInstance';
 
-const TODOS_LOS_CAMPOS_POR_TABLA: Record<string, { value: string; label: string }[]> = {
-  venta: [
-    { value: 'cliente', label: 'Cliente' },
-    { value: 'producto', label: 'Producto' },
-    { value: 'cantidad', label: 'Cantidad' },
-    { value: 'precio_total', label: 'Precio total' },
-    { value: 'fecha', label: 'Fecha' },
-  ],
-  producto: [
-    { value: 'nombre', label: 'Nombre' },
-    { value: 'marca', label: 'Marca' },
-    { value: 'precio', label: 'Precio' },
-    { value: 'stock', label: 'Stock' },
-  ],
-}
+import { toast } from 'react-toastify';
 
-export default function ReporteDinamico() {
-  const [isLoading, setIsLoading] = useState(false)
-  const [formato, setFormato] = useState<'excel' | 'pdf' | 'html'>('excel')
-  const [tabla, setTabla] = useState<'venta' | 'producto'>('venta')
-  const [campos, setCampos] = useState<string[]>([])
+const ReporteVentasForm: React.FC = () => {
+  const [fechaInicio, setFechaInicio] = useState('');
+  const [fechaFin, setFechaFin] = useState('');
+  const [formato, setFormato] = useState<'pdf' | 'excel'>('pdf'); // Controla el formato seleccionado
 
-  const toggleCampo = (value: string) => {
-    setCampos((prev) =>
-      prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]
-    )
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+
+  if (!fechaInicio || !fechaFin) {
+    toast.error('Por favor, ingresa las fechas');
+    return;
   }
 
-  const obtenerReporteDinamico = async () => {
-    if (!campos.length) {
-      toast.info('Selecciona al menos un campo.')
-      return
-    }
-    setIsLoading(true)
-    try {
-      const resp = await axios.get('/reportes/dinamicos/generar_reporte/', {
-        params: { tabla, campos, formato },
-        paramsSerializer: (p) => qs.stringify(p, { arrayFormat: 'repeat' }),
-        responseType: formato === 'html' ? 'text' : 'blob',
-      })
+  // Verifica que las fechas tengan valores correctos antes de enviar
+  console.log('Fecha inicio:', fechaInicio);
+  console.log('Fecha fin:', fechaFin);
 
-      if (formato === 'html') {
-        const win = window.open()
-        if (win) {
-          win.document.write(resp.data)
-          win.document.close()
-        } else {
-          toast.error('No se pudo abrir la ventana (pop-ups bloqueados).')
-        }
-      } else {
-        const url = window.URL.createObjectURL(new Blob([resp.data]))
-        const a = document.createElement('a')
-        a.href = url
-        a.download = `Reporte_${tabla}.${formato === 'pdf' ? 'pdf' : 'xlsx'}`
-        document.body.appendChild(a)
-        a.click()
-        document.body.removeChild(a)
-        window.URL.revokeObjectURL(url)
-        toast.success(`Reporte ${formato.toUpperCase()} descargado`)
-      }
-    } catch (e) {
-      console.error(e)
-      toast.error('Error al generar el reporte')
-    } finally {
-      setIsLoading(false)
-    }
+  try {
+    const params = {
+      fecha_inicio: fechaInicio,
+      fecha_fin: fechaFin,
+      formato, // Se pasa el formato seleccionado (PDF o Excel)
+    };
+
+    // Se establece el tipo de contenido esperado en base al formato seleccionado
+    const contentType = formato === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
+    const { data } = await axios.post('/reporte/ventas/', params, { responseType: 'blob' });
+
+    // Crear enlace para descargar el archivo
+    const blob = new Blob([data], { type: contentType });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `reporte_ventas.${formato === 'pdf' ? 'pdf' : 'xlsx'}`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link); // Limpiar el elemento
+
+    // Opcional: mostrar notificación de éxito
+    toast.success(`Reporte en formato ${formato.toUpperCase()} generado correctamente`);
+  } catch (error) {
+    console.error('Error al generar el reporte:', error);
+    toast.error('Hubo un error al generar el reporte');
   }
+};
 
-  const opciones = TODOS_LOS_CAMPOS_POR_TABLA[tabla] ?? []
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="mx-auto max-w-2xl space-y-6">
-        <h1 className="text-2xl font-semibold text-center">Generar Reporte Dinámico</h1>
-
-        <div className="bg-white shadow rounded-xl p-6 space-y-6">
-          {/* Tabla */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-700">Tabla</label>
-            <select
-              value={tabla}
-              onChange={(e) => {
-                setTabla(e.target.value as any)
-                setCampos([]) // limpiar selección al cambiar tabla
-              }}
-              className="w-full rounded-lg border p-2.5 focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="venta">Venta</option>
-              <option value="producto">Producto</option>
-            </select>
-          </div>
-
-          {/* Campos (checkboxes) */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-700">Campos</label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {opciones.map((c) => (
-                <label
-                  key={c.value}
-                  className="flex items-center gap-2 rounded-lg border p-2 hover:bg-gray-50 cursor-pointer"
-                >
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4"
-                    checked={campos.includes(c.value)}
-                    onChange={() => toggleCampo(c.value)}
-                  />
-                  <span className="text-sm text-gray-800">{c.label}</span>
-                </label>
-              ))}
-            </div>
-            <p className="text-xs text-gray-500">
-              Seleccionados: {campos.length ? campos.join(', ') : 'ninguno'}
-            </p>
-          </div>
-
-          {/* Formato */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-700">Formato</label>
-            <select
-              value={formato}
-              onChange={(e) => setFormato(e.target.value as any)}
-              className="w-full rounded-lg border p-2.5 focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="excel">Excel</option>
-              <option value="pdf">PDF</option>
-              <option value="html">HTML</option>
-            </select>
-          </div>
-
-          {/* Botón */}
-          <button
-            onClick={obtenerReporteDinamico}
-            disabled={isLoading}
-            className="w-full sm:w-auto inline-flex justify-center rounded-lg bg-blue-600 px-6 py-2.5 text-white font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60"
-          >
-            {isLoading ? 'Generando…' : 'Generar reporte'}
-          </button>
+    <div className="p-4 bg-white shadow-lg rounded-lg">
+      <h2 className="text-xl font-bold mb-4 text-gray-700">Generar Reporte de Ventas 📊</h2>
+      <hr className="mb-4" />
+      <form
+        onSubmit={handleSubmit}
+        // Usamos flex para poner los elementos en una fila
+        className="flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-4 items-end"
+      >
+        {/* Campo Fecha de inicio */}
+        <div className="flex flex-col w-full md:w-auto">
+          <label htmlFor="fechaInicio" className="text-sm font-medium text-gray-600 mb-1">
+            Fecha de inicio:
+          </label>
+          <input
+            id="fechaInicio"
+            type="date"
+            value={fechaInicio}
+            onChange={(e) => setFechaInicio(e.target.value)}
+            required
+            className="p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 transition duration-150 ease-in-out"
+          />
         </div>
-      </div>
+
+        {/* Campo Fecha de fin */}
+        <div className="flex flex-col w-full md:w-auto">
+          <label htmlFor="fechaFin" className="text-sm font-medium text-gray-600 mb-1">
+            Fecha de fin:
+          </label>
+          <input
+            id="fechaFin"
+            type="date"
+            value={fechaFin}
+            onChange={(e) => setFechaFin(e.target.value)}
+            required
+            className="p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 transition duration-150 ease-in-out"
+          />
+        </div>
+
+        {/* Campo Formato */}
+        <div className="flex flex-col w-full md:w-auto">
+          <label htmlFor="formato" className="text-sm font-medium text-gray-600 mb-1">
+            Formato:
+          </label>
+          <select
+            id="formato"
+            value={formato}
+            onChange={(e) => setFormato(e.target.value as 'pdf' | 'excel')}
+            className="p-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500 transition duration-150 ease-in-out"
+          >
+            <option value="pdf">PDF</option>
+            <option value="excel">Excel</option>
+          </select>
+        </div>
+
+        {/* Botón Generar Reporte */}
+        <button
+          type="submit"
+          className="w-full md:w-auto px-4 py-2 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition duration-150 ease-in-out"
+        >
+          Generar Reporte
+        </button>
+      </form>
     </div>
-  )
-}
+  );
+};
+
+export default ReporteVentasForm;
